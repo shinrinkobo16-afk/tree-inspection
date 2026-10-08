@@ -98,6 +98,10 @@
   .empty{color:var(--muted);text-align:center;padding:30px 0;}
   .small{font-size:12px;color:var(--muted);}
   hr.sep{border:none;border-top:1px solid var(--border);margin:12px 0;}
+  .drop-zone{border:2px dashed var(--border-input);border-radius:10px;padding:18px 12px;text-align:center;color:var(--muted);font-size:14px;cursor:pointer;background:var(--card-2);}
+  .drop-zone.over{border-color:var(--main-dark);color:var(--main-dark);}
+  .drop-overlay{position:fixed;inset:0;background:rgba(27,29,25,.85);border:4px dashed var(--main-dark);z-index:300;display:none;align-items:center;justify-content:center;font-size:20px;color:var(--main-dark);font-weight:bold;pointer-events:none;}
+  .drop-overlay.show{display:flex;}
 
   /* 印刷/PDF用レイアウト */
   #printArea{position:fixed;left:-9999px;top:0;width:700px;background:#fff;color:#111;}
@@ -227,6 +231,7 @@
       </select>
     </div>
     <div id="listContainer"></div>
+    <button id="listImportBtn" style="width:100%;margin-top:4px;">📥 ファイルから記録を読み込む(PC・別端末の記録)</button>
   </section>
 
   <!-- 設定画面 -->
@@ -238,11 +243,16 @@
       <button class="primary" id="setSaveBtn">保存</button>
     </div>
     <div class="card">
-      <h2>バックアップ</h2>
-      <div class="small" style="margin-bottom:10px;">端末変更・紛失対策として、全点検記録(写真含む)をJSONファイルに書き出し/読み込みできます。</div>
-      <button id="backupExportBtn" style="width:100%;margin-bottom:8px;">記録を書き出す(JSON)</button>
-      <label>記録を読み込む(JSON)</label>
-      <input type="file" id="backupImportInput" accept=".json">
+      <h2>Googleドライブに保存</h2>
+      <div class="small" style="margin-bottom:10px;">全点検記録(写真含む)を1つのファイルにまとめて保存します。スマホでは共有画面が開くので「<b>ドライブ</b>」を選んでください(Googleドライブのアプリが必要です)。</div>
+      <button class="primary" id="driveExportBtn" style="width:100%;margin-bottom:8px;">☁️ 記録をGoogleドライブに保存</button>
+      <button id="backupExportBtn" style="width:100%;">この端末に保存(ダウンロード)</button>
+    </div>
+    <div class="card">
+      <h2>記録を読み込む(PC・別端末)</h2>
+      <div class="small" style="margin-bottom:10px;">Googleドライブなどから取ってきた記録ファイル(「点検記録_…」で始まる .txt / .json)を読み込みます。同じ記録は重複せず、新しい記録だけ追加されます。</div>
+      <div class="drop-zone" id="importDropZone">ここをクリックしてファイルを選ぶ<br><span class="small">(PCではファイルをここにドラッグ&ドロップでもOK・複数可)</span></div>
+      <input type="file" id="backupImportInput" accept=".json,.txt,application/json,text/plain" multiple style="display:none;">
     </div>
     <div class="card">
       <h2>記録はどこに保存される?</h2>
@@ -257,12 +267,13 @@
         PCでそのPDFを開くだけで内容が確認できます。
       </div>
       <hr class="sep">
-      <div class="small" style="margin-bottom:6px;"><b>②記録一覧ごとPCに持っていきたいとき</b></div>
+      <div class="small" style="margin-bottom:6px;"><b>②記録一覧ごとPCに持っていきたいとき(Googleドライブ経由)</b></div>
       <div class="small">
-        1. このページの上にある「記録を書き出す(JSON)」でファイルを保存する<br>
-        2. そのJSONファイルをPCにも送る(LINE・メール・Googleドライブなど)<br>
-        3. PCのブラウザで同じURLを開き、「記録を読み込む(JSON)」でそのファイルを選ぶ<br>
-        4. 「📋記録一覧」にスマホの記録がPCでも表示される
+        1. スマホで「☁️ 記録をGoogleドライブに保存」を押し、共有画面で「ドライブ」を選んで保存<br>
+        2. PCでGoogleドライブ(drive.google.com)を開き、そのファイルをダウンロード<br>
+        3. PCのブラウザでこのアプリを開き、「記録を読み込む」の枠にファイルをドラッグ&ドロップ(またはクリックして選ぶ)<br>
+        4. 「📋記録一覧」にスマホの記録がPCでも表示される<br>
+        ※ 何度読み込んでも同じ記録は重複しません。毎回「全部まとめたファイル」を保存すればOKです。
       </div>
       <hr class="sep">
       <div class="small">事故等があった際の参照用に、①を都度行い、②でときどきバックアップしておくと安心です。</div>
@@ -289,6 +300,7 @@
 </div>
 
 <div class="status-msg" id="statusMsg"></div>
+<div class="drop-overlay" id="dropOverlay">ここにファイルを離すと記録を読み込みます</div>
 
 <!-- 印刷/PDF用エリア -->
 <div id="printArea"></div>
@@ -1126,7 +1138,8 @@ function applyListFilter(){
   if(jf) list=list.filter(r=>r.judgment===jf);
   const c=document.getElementById('listContainer');
   if(!list.length){
-    c.innerHTML='<div class="empty">記録がありません</div>';
+    c.innerHTML=allRecords.length ? '<div class="empty">条件に合う記録がありません</div>'
+      : '<div class="empty">記録がありません<br><span class="small">PCでスマホの記録を見るには、Googleドライブから取ってきたファイルを下のボタンで読み込んでください</span></div>';
     return;
   }
   c.innerHTML='';
@@ -1156,20 +1169,52 @@ function closeDetail(){
 }
 
 /* ===== バックアップ ===== */
-async function exportBackup(){
+// 中身はJSONだが拡張子は .txt にする(AndroidのChromeは .json を共有シートに渡せないため)
+async function buildBackupFile(){
   const all=await dbGetAll();
   const payload={_format:'tree-inspection-backup-v1',exportedAt:Date.now(),records:all};
-  const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
-  downloadFile(blob,`点検記録バックアップ_${fileTimeStamp(Date.now())}.json`);
+  const blob=new Blob([JSON.stringify(payload)],{type:'text/plain'});
+  return {blob,count:all.length,filename:`点検記録_全${all.length}件_${fileTimeStamp(Date.now())}.txt`};
 }
-async function importBackup(file){
-  const text=await file.text();
-  const data=JSON.parse(text);
-  const records=Array.isArray(data) ? data : (data.records||[]);
-  for(const r of records){ await dbPut(r); }
-  showStatus(`${records.length}件読み込みました`);
-  renderList();
+async function exportBackup(){
+  const f=await buildBackupFile();
+  if(!f.count){ alert('保存する記録がありません'); return; }
+  downloadFile(f.blob,f.filename);
 }
+async function exportToDrive(){
+  const f=await buildBackupFile();
+  if(!f.count){ alert('保存する記録がありません'); return; }
+  await shareOrDownload(f.blob,f.filename,'text/plain');
+}
+function isRecordLike(r){
+  return r && typeof r==='object' && r.id && Array.isArray(r.checklist);
+}
+async function importBackupFiles(files){
+  const existing=new Set((await dbGetAll()).map(r=>r.id));
+  let added=0,updated=0;
+  const failed=[];
+  for(const file of files){
+    try{
+      const data=JSON.parse(await file.text());
+      const records=(Array.isArray(data) ? data : (data.records||[])).filter(isRecordLike);
+      if(!records.length) throw new Error('記録が見つかりません');
+      for(const r of records){
+        if(existing.has(r.id)) updated++; else { added++; existing.add(r.id); }
+        await dbPut(r);
+      }
+    }catch(e){
+      console.error(e);
+      failed.push(file.name);
+    }
+  }
+  await renderList();
+  let msg=`読み込みました: 新しい記録 ${added}件`;
+  if(updated) msg+=`\n(${updated}件はすでに入っていたので重複しません)`;
+  if(failed.length) msg+=`\n\n読み込めなかったファイル:\n${failed.join('\n')}\n(このアプリで保存した「点検記録_…」のファイルか確認してください)`;
+  alert(msg);
+  if(added||updated) showScreen('screenList');
+}
+function openImportPicker(){ document.getElementById('backupImportInput').click(); }
 
 /* ===== 初期化 ===== */
 initSettings();
@@ -1198,14 +1243,13 @@ document.getElementById('poDamageNote').oninput=e=>{poState.damageNote=e.target.
 
 document.getElementById('saveBtn').onclick=saveRecord;
 
+function showScreen(id){
+  document.querySelectorAll('.tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.screen===id));
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===id));
+  if(id==='screenList') renderList();
+}
 document.querySelectorAll('.tabbar button').forEach(btn=>{
-  btn.onclick=()=>{
-    document.querySelectorAll('.tabbar button').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-    document.getElementById(btn.dataset.screen).classList.add('active');
-    if(btn.dataset.screen==='screenList') renderList();
-  };
+  btn.onclick=()=>showScreen(btn.dataset.screen);
 });
 
 document.getElementById('listSearch').oninput=applyListFilter;
@@ -1232,17 +1276,33 @@ document.getElementById('setSaveBtn').onclick=()=>{
 };
 
 document.getElementById('backupExportBtn').onclick=exportBackup;
+document.getElementById('driveExportBtn').onclick=exportToDrive;
+document.getElementById('listImportBtn').onclick=openImportPicker;
+document.getElementById('importDropZone').onclick=openImportPicker;
 document.getElementById('backupImportInput').onchange=async(e)=>{
-  const file=e.target.files[0];
-  if(!file) return;
-  try{
-    await importBackup(file);
-  }catch(err){
-    console.error(err);
-    alert('読み込みに失敗しました: '+err.message);
-  }
+  const files=Array.from(e.target.files||[]);
   e.target.value='';
+  if(files.length) await importBackupFiles(files);
 };
+
+// PC向け: 画面のどこにファイルをドロップしても読み込む
+(function(){
+  const overlay=document.getElementById('dropOverlay');
+  const zone=document.getElementById('importDropZone');
+  let depth=0;
+  const hasFiles=e=>e.dataTransfer && Array.from(e.dataTransfer.types||[]).includes('Files');
+  const hide=()=>{ depth=0; overlay.classList.remove('show'); zone.classList.remove('over'); };
+  window.addEventListener('dragenter',e=>{ if(!hasFiles(e)) return; e.preventDefault(); depth++; overlay.classList.add('show'); zone.classList.add('over'); });
+  window.addEventListener('dragover',e=>{ if(hasFiles(e)) e.preventDefault(); });
+  window.addEventListener('dragleave',e=>{ if(!hasFiles(e)) return; depth--; if(depth<=0) hide(); });
+  window.addEventListener('drop',async e=>{
+    if(!hasFiles(e)) return;
+    e.preventDefault();
+    hide();
+    const files=Array.from(e.dataTransfer.files||[]);
+    if(files.length) await importBackupFiles(files);
+  });
+})();
 
 renderList();
 </script>
