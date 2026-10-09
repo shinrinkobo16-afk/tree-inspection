@@ -263,7 +263,8 @@
       <hr class="sep">
       <div class="small" style="margin-bottom:6px;"><b>①PCで1件だけ確認したいとき(一番簡単)</b></div>
       <div class="small">
-        保存したときに出てくるPDFを、LINE・メール・Googleドライブなどで自分宛てに送っておけば、
+        保存するとPDFがスマホの「ダウンロード」フォルダに保存されます。
+        そのPDFをファイルアプリからGoogleドライブ・LINE・メールなどで自分宛てに送っておけば、
         PCでそのPDFを開くだけで内容が確認できます。
       </div>
       <hr class="sep">
@@ -1061,11 +1062,12 @@ async function shareOrDownload(blob,filename,mime){
   }catch(e){ /* File/share構築に失敗した場合はダウンロードへ */ }
   downloadFile(blob,filename);
 }
-async function generateAndSharePdf(record){
+// PDFは共有画面を出さず、端末(ダウンロードフォルダ)にそのまま保存する。ドライブへは設定画面から送る
+async function generateAndSavePdf(record){
   renderPrintArea(record);
   const blob=await printAreaToPdfBlob();
   const filename=`点検記録_${sanitizeFilename(record.site||'現場')}_${sanitizeFilename(record.treeLabel||record.species||'樹木')}_${fileTimeStamp(record.createdAt)}.pdf`;
-  await shareOrDownload(blob,filename,'application/pdf');
+  downloadFile(blob,filename);
 }
 
 /* ===== 入力フォーム ===== */
@@ -1112,8 +1114,8 @@ async function saveRecord(){
   saveBtn.disabled=true;
   try{
     await dbPut(record);
-    await generateAndSharePdf(record);
-    showStatus('保存しました');
+    await generateAndSavePdf(record);
+    showStatus('保存しました(PDFはスマホのダウンロードに保存)');
     resetForm();
     renderList();
   }catch(e){
@@ -1258,7 +1260,7 @@ document.getElementById('listJudgeFilter').onchange=applyListFilter;
 document.getElementById('detailCloseBtn').onclick=closeDetail;
 document.getElementById('detailPdfBtn').onclick=async()=>{
   if(!currentDetailRecord) return;
-  await generateAndSharePdf(currentDetailRecord);
+  await generateAndSavePdf(currentDetailRecord);
 };
 document.getElementById('detailDeleteBtn').onclick=async()=>{
   if(!currentDetailRecord) return;
